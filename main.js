@@ -103,6 +103,7 @@ async function callGemini(question, settings) {
   }
   return response.json.candidates[0].content.parts[0].text.trim();
 }
+// Builds effective settings by appending answer length instructions based on mode (short/long)
 function buildEffectiveSettings(settings, mode) {
   var effectivePrompt = settings.systemPrompt;
   if (mode === "short") {
