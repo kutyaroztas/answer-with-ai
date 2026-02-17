@@ -1,0 +1,11 @@
+/* Answer with AI - Callout styling */
+.callout[data-callout="ai"] {
+    --callout-color: 136, 96, 208;
+    --callout-icon: lucide-bot;
+    background-color: rgba(136, 96, 208, 0.05);
+    border-left: 4px solid rgb(136, 96, 208);
+}
+
+.callout[data-callout="ai"] .callout-title {
+    font-weight: 600;
+}
