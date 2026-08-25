@@ -4,7 +4,7 @@ An [Obsidian](https://obsidian.md) plugin that lets you highlight a question in 
 
 ## Features
 
-- **Multi-provider support** — Choose between **Claude (Anthropic)**, **OpenAI (GPT)**, or **Google Gemini** as your AI provider.
+- **Multi-provider support** — Choose between **Claude (Anthropic)**, **OpenAI (GPT)**, **Google Gemini**, or a local **Ollama** server as your AI provider.
 - **Short & Long answer modes** — Get a quick 3-4 sentence summary or a detailed explanation of up to 10 sentences.
 - **Customizable system prompt** — Fine-tune how the AI responds by editing the system prompt in settings.
 - **Plain text output** — Answers are inserted as clean, plain text without markdown formatting.
@@ -24,9 +24,10 @@ An [Obsidian](https://obsidian.md) plugin that lets you highlight a question in 
 
 | Setting | Description |
 |---|---|
-| **AI Provider** | Select Claude, OpenAI, or Gemini. |
-| **API Key** | Your API key for the selected provider. |
-| **Model** | The model to use (e.g. `claude-sonnet-4-20250514`, `gpt-4o`, `gemini-2.0-flash`). |
+| **AI Provider** | Select Claude, OpenAI, Gemini, or Ollama. |
+| **API Key** | Your API key for the selected provider (not needed for Ollama). |
+| **Base URL** | (Ollama only) URL of your local Ollama server, e.g. `http://localhost:11434`. |
+| **Model** | The model to use (e.g. `claude-sonnet-4-20250514`, `gpt-4o`, `gemini-2.0-flash`, `llama3`). |
 | **Default Answer Mode** | Choose between Short (3-4 sentences) and Long (up to 10 sentences) as the default. |
 | **System Prompt** | The base system prompt sent to the AI before your question. |
 | **Max Tokens** | Maximum number of tokens in the AI response. |
@@ -55,6 +56,7 @@ An [Obsidian](https://obsidian.md) plugin that lets you highlight a question in 
 | **Claude (Anthropic)** | `sk-ant-...` | `claude-sonnet-4-20250514`, `claude-3-haiku-20240307` |
 | **OpenAI** | `sk-proj-...` | `gpt-4o`, `gpt-4o-mini`, `gpt-3.5-turbo` |
 | **Gemini (Google)** | Google AI API key | `gemini-2.0-flash`, `gemini-1.5-pro` |
+| **Ollama (Local)** | None (runs on your own machine) | `llama3`, `qwen3:14b`, `gemma3:4b` |
 
 ## License
 

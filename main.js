@@ -31,6 +31,8 @@ var DEFAULT_SETTINGS = {
   claudeModel: "claude-sonnet-4-20250514",
   geminiApiKey: "",
   geminiModel: "gemini-2.0-flash",
+  ollamaBaseUrl: "http://localhost:11434",
+  ollamaModel: "llama3",
   systemPrompt: "You are a helpful assistant. Answer the question concisely and clearly in plain text. Do not use markdown formatting, code blocks, bullet points, or any special formatting. Just write plain sentences.",
   maxTokens: 1024,
   answerMode: "short"
@@ -103,6 +105,31 @@ async function callGemini(question, settings) {
   }
   return response.json.candidates[0].content.parts[0].text.trim();
 }
+async function callOllama(question, settings) {
+  if (!settings.ollamaBaseUrl)
+    throw new Error("Ollama base URL is not set.");
+  if (!settings.ollamaModel)
+    throw new Error("Ollama model is not set.");
+  const baseUrl = settings.ollamaBaseUrl.replace(/\/+$/, "");
+  const response = await (0, import_obsidian.requestUrl)({
+    url: `${baseUrl}/api/chat`,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: settings.ollamaModel,
+      messages: [
+        { role: "system", content: settings.systemPrompt },
+        { role: "user", content: question }
+      ],
+      stream: false,
+      options: { num_predict: settings.maxTokens }
+    })
+  });
+  if (response.status !== 200) {
+    throw new Error(`Ollama API error: ${response.status} - ${response.text}`);
+  }
+  return response.json.message.content.trim();
+}
 // Builds effective settings by appending answer length instructions based on mode (short/long)
 function buildEffectiveSettings(settings, mode) {
   var effectivePrompt = settings.systemPrompt;
@@ -122,6 +149,8 @@ async function getAIResponse(question, settings, mode) {
       return callClaude(question, effectiveSettings);
     case "gemini":
       return callGemini(question, effectiveSettings);
+    case "ollama":
+      return callOllama(question, effectiveSettings);
     default:
       throw new Error(`Unknown provider: ${effectiveSettings.provider}`);
   }
@@ -194,7 +223,7 @@ var AnswerWithAISettingTab = class extends import_obsidian.PluginSettingTab {
     });
     containerEl.createEl("h2", { text: "Provider" });
     new import_obsidian.Setting(containerEl).setName("AI Provider").setDesc("Choose which AI provider to use for answering questions.").addDropdown(
-      (dropdown) => dropdown.addOption("openai", "OpenAI (GPT)").addOption("claude", "Claude (Anthropic)").addOption("gemini", "Gemini (Google)").setValue(this.plugin.settings.provider).onChange(async (value) => {
+      (dropdown) => dropdown.addOption("openai", "OpenAI (GPT)").addOption("claude", "Claude (Anthropic)").addOption("gemini", "Gemini (Google)").addOption("ollama", "Ollama (Local)").setValue(this.plugin.settings.provider).onChange(async (value) => {
         this.plugin.settings.provider = value;
         await this.plugin.saveSettings();
         this.display();
@@ -241,6 +270,21 @@ var AnswerWithAISettingTab = class extends import_obsidian.PluginSettingTab {
       new import_obsidian.Setting(containerEl).setName("Model").setDesc("Gemini model to use (e.g. gemini-2.0-flash, gemini-1.5-pro)").addText(
         (text) => text.setValue(this.plugin.settings.geminiModel).onChange(async (value) => {
           this.plugin.settings.geminiModel = value.trim();
+          await this.plugin.saveSettings();
+        })
+      );
+    }
+    if (this.plugin.settings.provider === "ollama") {
+      containerEl.createEl("h2", { text: "Ollama Settings" });
+      new import_obsidian.Setting(containerEl).setName("Base URL").setDesc("URL of your local Ollama server.").addText(
+        (text) => text.setPlaceholder("http://localhost:11434").setValue(this.plugin.settings.ollamaBaseUrl).onChange(async (value) => {
+          this.plugin.settings.ollamaBaseUrl = value.trim();
+          await this.plugin.saveSettings();
+        })
+      );
+      new import_obsidian.Setting(containerEl).setName("Model").setDesc("Ollama model to use (e.g. llama3, qwen3:14b, gemma3:4b).").addText(
+        (text) => text.setValue(this.plugin.settings.ollamaModel).onChange(async (value) => {
+          this.plugin.settings.ollamaModel = value.trim();
           await this.plugin.saveSettings();
         })
       );
