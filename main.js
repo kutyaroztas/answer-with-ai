@@ -122,13 +122,18 @@ async function callOllama(question, settings) {
         { role: "user", content: question }
       ],
       stream: false,
+      think: false,
       options: { num_predict: settings.maxTokens }
     })
   });
   if (response.status !== 200) {
     throw new Error(`Ollama API error: ${response.status} - ${response.text}`);
   }
-  return response.json.message.content.trim();
+  const content = response.json.message.content.trim();
+  if (!content) {
+    throw new Error("Ollama returned no content — response was truncated by the token limit, likely consumed by model reasoning. Try raising Max Tokens or disabling thinking.");
+  }
+  return content;
 }
 // Builds effective settings by appending answer length instructions based on mode (short/long)
 function buildEffectiveSettings(settings, mode) {
