@@ -302,7 +302,7 @@ var AnswerWithAISettingTab = class extends import_obsidian.PluginSettingTab {
       })
     );
     new import_obsidian.Setting(containerEl).setName("System Prompt").setDesc("System prompt sent to the AI before your question.").addTextArea(
-      (text) => text.setValue(this.plugin.settings.systemPrompt).onChange(async (value) => {
+      (text) => text.setValue(this.plugin.settings.systemPrompt).setRows(6).onChange(async (value) => {
         this.plugin.settings.systemPrompt = value;
         await this.plugin.saveSettings();
       })
