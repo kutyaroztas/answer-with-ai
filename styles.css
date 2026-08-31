@@ -9,3 +9,32 @@
 .callout[data-callout="ai"] .callout-title {
     font-weight: 600;
 }
+
+/* Answer with AI - "Test connection" control in settings */
+.awai-test-connection {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: -6px 0 14px;
+    flex-wrap: wrap;
+}
+
+.awai-test-connection-btn {
+    font-size: 11px;
+    padding: 2px 8px;
+    line-height: 1.4;
+    cursor: pointer;
+}
+
+.awai-test-connection-result {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.awai-test-connection-result.awai-test-ok {
+    color: var(--text-success, var(--text-muted));
+}
+
+.awai-test-connection-result.awai-test-err {
+    color: var(--text-error, var(--text-muted));
+}
