@@ -185,7 +185,7 @@ async function fetchModels(settings) {
       });
       if (response.status !== 200)
         throw new Error(`HTTP ${response.status} - ${response.text}`);
-      return response.json.data.map((m) => m.id).filter((id) => /^(gpt-|o1|o3|o4|chatgpt-)/.test(id) && !/(embedding|whisper|tts|audio|dall-e|davinci|babbage|moderation|image|search|realtime|transcribe)/.test(id)).sort();
+      return response.json.data.map((m) => m.id).filter((id) => /^(gpt-|o1|o3|o4|chatgpt-)/.test(id) && !/(embedding|whisper|tts|dall-e|davinci|babbage|moderation|image|realtime|transcribe)/.test(id)).sort();
     }
     case "claude": {
       if (!settings.claudeApiKey)
@@ -461,7 +461,7 @@ function addModelSetting(containerEl, settingTab, opts) {
         if (!plugin.settings.cachedModels)
           plugin.settings.cachedModels = {};
         plugin.settings.cachedModels[provider] = models;
-        if (models.length && !models.includes(plugin.settings[opts.key])) {
+        if (models.length && !plugin.settings[opts.key]) {
           plugin.settings[opts.key] = models[0];
         }
         await plugin.saveSettings();
