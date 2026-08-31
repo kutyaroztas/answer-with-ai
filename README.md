@@ -6,6 +6,7 @@ An [Obsidian](https://obsidian.md) plugin that lets you highlight a question in 
 
 - **Multi-provider support** — Choose between **Claude (Anthropic)**, **OpenAI (GPT)**, **Google Gemini**, or a local **Ollama** server as your AI provider.
 - **Short & Long answer modes** — Get a quick 3-4 sentence summary or a detailed explanation of up to 10 sentences.
+- **Test connection** — A small button below the API key / Base URL field verifies your credentials and server reachability without spending tokens.
 - **Customizable system prompt** — Fine-tune how the AI responds by editing the system prompt in settings.
 - **Plain text output** — Answers are inserted as clean, plain text without markdown formatting.
 
@@ -26,6 +27,7 @@ An [Obsidian](https://obsidian.md) plugin that lets you highlight a question in 
 |---|---|
 | **AI Provider** | Select Claude, OpenAI, Gemini, or Ollama. |
 | **API Key** | Your API key for the selected provider (not needed for Ollama). |
+| **Test connection** | Small button under the API key / Base URL field; checks that the provider is reachable and the key is valid. |
 | **Base URL** | (Ollama only) URL of your local Ollama server, e.g. `http://localhost:11434`. |
 | **Model** | The model to use (e.g. `claude-sonnet-4-20250514`, `gpt-4o`, `gemini-2.0-flash`, `llama3`). |
 | **Default Answer Mode** | Choose between Short (3-4 sentences) and Long (up to 10 sentences) as the default. |

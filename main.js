@@ -135,6 +135,67 @@ async function callOllama(question, settings) {
   }
   return content;
 }
+// Lightweight connectivity check per provider — hits a cheap list endpoint, does not consume tokens
+async function testConnection(settings) {
+  switch (settings.provider) {
+    case "openai": {
+      if (!settings.openaiApiKey)
+        throw new Error("OpenAI API key is not set.");
+      const response = await (0, import_obsidian.requestUrl)({
+        url: "https://api.openai.com/v1/models",
+        method: "GET",
+        headers: { "Authorization": `Bearer ${settings.openaiApiKey}` },
+        throw: false
+      });
+      if (response.status !== 200)
+        throw new Error(`HTTP ${response.status} - ${response.text}`);
+      return "OpenAI connection OK.";
+    }
+    case "claude": {
+      if (!settings.claudeApiKey)
+        throw new Error("Claude API key is not set.");
+      const response = await (0, import_obsidian.requestUrl)({
+        url: "https://api.anthropic.com/v1/models",
+        method: "GET",
+        headers: {
+          "x-api-key": settings.claudeApiKey,
+          "anthropic-version": "2023-06-01"
+        },
+        throw: false
+      });
+      if (response.status !== 200)
+        throw new Error(`HTTP ${response.status} - ${response.text}`);
+      return "Claude connection OK.";
+    }
+    case "gemini": {
+      if (!settings.geminiApiKey)
+        throw new Error("Gemini API key is not set.");
+      const response = await (0, import_obsidian.requestUrl)({
+        url: `https://generativelanguage.googleapis.com/v1beta/models?key=${settings.geminiApiKey}`,
+        method: "GET",
+        throw: false
+      });
+      if (response.status !== 200)
+        throw new Error(`HTTP ${response.status} - ${response.text}`);
+      return "Gemini connection OK.";
+    }
+    case "ollama": {
+      if (!settings.ollamaBaseUrl)
+        throw new Error("Ollama base URL is not set.");
+      const baseUrl = settings.ollamaBaseUrl.replace(/\/+$/, "");
+      const response = await (0, import_obsidian.requestUrl)({
+        url: `${baseUrl}/api/tags`,
+        method: "GET",
+        throw: false
+      });
+      if (response.status !== 200)
+        throw new Error(`HTTP ${response.status} - ${response.text}`);
+      return "Ollama connection OK.";
+    }
+    default:
+      throw new Error(`Unknown provider: ${settings.provider}`);
+  }
+}
 // Builds effective settings by appending answer length instructions based on mode (short/long)
 function buildEffectiveSettings(settings, mode) {
   var effectivePrompt = settings.systemPrompt;
@@ -213,6 +274,28 @@ var AnswerWithAIPlugin = class extends import_obsidian.Plugin {
     }
   }
 };
+// Renders a small "Test connection" button + result text right below the API key field
+function addTestConnectionButton(containerEl, plugin) {
+  const wrapper = containerEl.createDiv({ cls: "awai-test-connection" });
+  const button = wrapper.createEl("button", { text: "Test connection", cls: "awai-test-connection-btn" });
+  const result = wrapper.createSpan({ cls: "awai-test-connection-result" });
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    result.setText("Testing…");
+    result.removeClass("awai-test-ok", "awai-test-err");
+    try {
+      const msg = await testConnection(plugin.settings);
+      result.setText("✅ " + msg);
+      result.addClass("awai-test-ok");
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      result.setText("❌ " + msg);
+      result.addClass("awai-test-err");
+    } finally {
+      button.disabled = false;
+    }
+  });
+}
 var AnswerWithAISettingTab = class extends import_obsidian.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
@@ -242,6 +325,7 @@ var AnswerWithAISettingTab = class extends import_obsidian.PluginSettingTab {
           await this.plugin.saveSettings();
         })
       );
+      addTestConnectionButton(containerEl, this.plugin);
       new import_obsidian.Setting(containerEl).setName("Model").setDesc("OpenAI model to use (e.g. gpt-4o, gpt-4o-mini, gpt-3.5-turbo)").addText(
         (text) => text.setValue(this.plugin.settings.openaiModel).onChange(async (value) => {
           this.plugin.settings.openaiModel = value.trim();
@@ -257,6 +341,7 @@ var AnswerWithAISettingTab = class extends import_obsidian.PluginSettingTab {
           await this.plugin.saveSettings();
         })
       );
+      addTestConnectionButton(containerEl, this.plugin);
       new import_obsidian.Setting(containerEl).setName("Model").setDesc("Claude model to use (e.g. claude-sonnet-4-20250514, claude-3-haiku-20240307)").addText(
         (text) => text.setValue(this.plugin.settings.claudeModel).onChange(async (value) => {
           this.plugin.settings.claudeModel = value.trim();
@@ -272,6 +357,7 @@ var AnswerWithAISettingTab = class extends import_obsidian.PluginSettingTab {
           await this.plugin.saveSettings();
         })
       );
+      addTestConnectionButton(containerEl, this.plugin);
       new import_obsidian.Setting(containerEl).setName("Model").setDesc("Gemini model to use (e.g. gemini-2.0-flash, gemini-1.5-pro)").addText(
         (text) => text.setValue(this.plugin.settings.geminiModel).onChange(async (value) => {
           this.plugin.settings.geminiModel = value.trim();
@@ -287,6 +373,7 @@ var AnswerWithAISettingTab = class extends import_obsidian.PluginSettingTab {
           await this.plugin.saveSettings();
         })
       );
+      addTestConnectionButton(containerEl, this.plugin);
       new import_obsidian.Setting(containerEl).setName("Model").setDesc("Ollama model to use (e.g. llama3, qwen3:14b, gemma3:4b).").addText(
         (text) => text.setValue(this.plugin.settings.ollamaModel).onChange(async (value) => {
           this.plugin.settings.ollamaModel = value.trim();
