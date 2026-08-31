@@ -33,9 +33,14 @@ var DEFAULT_SETTINGS = {
   geminiModel: "gemini-2.0-flash",
   ollamaBaseUrl: "http://localhost:11434",
   ollamaModel: "llama3",
+  openaiLocalBaseUrl: "http://localhost:8080",
+  openaiLocalApiKey: "",
+  openaiLocalModel: "",
   systemPrompt: "You are a helpful assistant. Answer the question concisely and clearly in plain text. Do not use markdown formatting, code blocks, bullet points, or any special formatting. Just write plain sentences.",
   maxTokens: 1024,
-  answerMode: "short"
+  answerMode: "short",
+  // Cached model lists fetched from each provider's "list models" endpoint (populated via the settings UI)
+  cachedModels: {}
 };
 async function callOpenAI(question, settings) {
   if (!settings.openaiApiKey)
@@ -135,6 +140,114 @@ async function callOllama(question, settings) {
   }
   return content;
 }
+async function callOpenAILocal(question, settings) {
+  if (!settings.openaiLocalBaseUrl)
+    throw new Error("OpenAI (Local) base URL is not set.");
+  const baseUrl = settings.openaiLocalBaseUrl.replace(/\/+$/, "");
+  const headers = { "Content-Type": "application/json" };
+  if (settings.openaiLocalApiKey)
+    headers["Authorization"] = `Bearer ${settings.openaiLocalApiKey}`;
+  const response = await (0, import_obsidian.requestUrl)({
+    url: `${baseUrl}/v1/chat/completions`,
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      model: settings.openaiLocalModel || "local-model",
+      messages: [
+        { role: "system", content: settings.systemPrompt },
+        { role: "user", content: question }
+      ],
+      max_tokens: settings.maxTokens,
+      stream: false
+    })
+  });
+  if (response.status !== 200) {
+    throw new Error(`OpenAI (Local) API error: ${response.status} - ${response.text}`);
+  }
+  const content = response.json.choices[0].message.content.trim();
+  if (!content) {
+    throw new Error("OpenAI (Local) returned no content — the response may have been truncated by the token limit or consumed by model reasoning. Try raising Max Tokens.");
+  }
+  return content;
+}
+// Fetches the list of available model ids for the given provider from its "list models" endpoint
+async function fetchModels(settings) {
+  switch (settings.provider) {
+    case "openai": {
+      if (!settings.openaiApiKey)
+        throw new Error("OpenAI API key is not set.");
+      const response = await (0, import_obsidian.requestUrl)({
+        url: "https://api.openai.com/v1/models",
+        method: "GET",
+        headers: { "Authorization": `Bearer ${settings.openaiApiKey}` },
+        throw: false
+      });
+      if (response.status !== 200)
+        throw new Error(`HTTP ${response.status} - ${response.text}`);
+      return response.json.data.map((m) => m.id).sort();
+    }
+    case "claude": {
+      if (!settings.claudeApiKey)
+        throw new Error("Claude API key is not set.");
+      const response = await (0, import_obsidian.requestUrl)({
+        url: "https://api.anthropic.com/v1/models?limit=1000",
+        method: "GET",
+        headers: {
+          "x-api-key": settings.claudeApiKey,
+          "anthropic-version": "2023-06-01"
+        },
+        throw: false
+      });
+      if (response.status !== 200)
+        throw new Error(`HTTP ${response.status} - ${response.text}`);
+      return response.json.data.map((m) => m.id);
+    }
+    case "gemini": {
+      if (!settings.geminiApiKey)
+        throw new Error("Gemini API key is not set.");
+      const response = await (0, import_obsidian.requestUrl)({
+        url: `https://generativelanguage.googleapis.com/v1beta/models?key=${settings.geminiApiKey}&pageSize=1000`,
+        method: "GET",
+        throw: false
+      });
+      if (response.status !== 200)
+        throw new Error(`HTTP ${response.status} - ${response.text}`);
+      return (response.json.models || []).filter((m) => (m.supportedGenerationMethods || []).includes("generateContent")).map((m) => m.name.replace(/^models\//, ""));
+    }
+    case "ollama": {
+      if (!settings.ollamaBaseUrl)
+        throw new Error("Ollama base URL is not set.");
+      const baseUrl = settings.ollamaBaseUrl.replace(/\/+$/, "");
+      const response = await (0, import_obsidian.requestUrl)({
+        url: `${baseUrl}/api/tags`,
+        method: "GET",
+        throw: false
+      });
+      if (response.status !== 200)
+        throw new Error(`HTTP ${response.status} - ${response.text}`);
+      return (response.json.models || []).map((m) => m.name);
+    }
+    case "openai-local": {
+      if (!settings.openaiLocalBaseUrl)
+        throw new Error("OpenAI (Local) base URL is not set.");
+      const baseUrl = settings.openaiLocalBaseUrl.replace(/\/+$/, "");
+      const headers = {};
+      if (settings.openaiLocalApiKey)
+        headers["Authorization"] = `Bearer ${settings.openaiLocalApiKey}`;
+      const response = await (0, import_obsidian.requestUrl)({
+        url: `${baseUrl}/v1/models`,
+        method: "GET",
+        headers,
+        throw: false
+      });
+      if (response.status !== 200)
+        throw new Error(`HTTP ${response.status} - ${response.text}`);
+      return (response.json.data || []).map((m) => m.id);
+    }
+    default:
+      throw new Error(`Unknown provider: ${settings.provider}`);
+  }
+}
 // Lightweight connectivity check per provider — hits a cheap list endpoint, does not consume tokens
 async function testConnection(settings) {
   switch (settings.provider) {
@@ -192,6 +305,23 @@ async function testConnection(settings) {
         throw new Error(`HTTP ${response.status} - ${response.text}`);
       return "Ollama connection OK.";
     }
+    case "openai-local": {
+      if (!settings.openaiLocalBaseUrl)
+        throw new Error("OpenAI (Local) base URL is not set.");
+      const baseUrl = settings.openaiLocalBaseUrl.replace(/\/+$/, "");
+      const headers = {};
+      if (settings.openaiLocalApiKey)
+        headers["Authorization"] = `Bearer ${settings.openaiLocalApiKey}`;
+      const response = await (0, import_obsidian.requestUrl)({
+        url: `${baseUrl}/v1/models`,
+        method: "GET",
+        headers,
+        throw: false
+      });
+      if (response.status !== 200)
+        throw new Error(`HTTP ${response.status} - ${response.text}`);
+      return "OpenAI (Local) connection OK.";
+    }
     default:
       throw new Error(`Unknown provider: ${settings.provider}`);
   }
@@ -217,6 +347,8 @@ async function getAIResponse(question, settings, mode) {
       return callGemini(question, effectiveSettings);
     case "ollama":
       return callOllama(question, effectiveSettings);
+    case "openai-local":
+      return callOpenAILocal(question, effectiveSettings);
     default:
       throw new Error(`Unknown provider: ${effectiveSettings.provider}`);
   }
@@ -296,6 +428,59 @@ function addTestConnectionButton(containerEl, plugin) {
     }
   });
 }
+// Renders a Model setting as a dropdown populated from the cached model list plus a "Refresh models"
+// button that fetches the list from the provider, and a text field for manual entry / override.
+function addModelSetting(containerEl, settingTab, opts) {
+  const plugin = settingTab.plugin;
+  const provider = plugin.settings.provider;
+  if (!plugin.settings.cachedModels)
+    plugin.settings.cachedModels = {};
+  const cached = plugin.settings.cachedModels[provider] || [];
+  const current = plugin.settings[opts.key] || "";
+  const options = cached.slice();
+  if (current && !options.includes(current))
+    options.unshift(current);
+  const setting = new import_obsidian.Setting(containerEl).setName("Model").setDesc(opts.desc);
+  if (options.length > 0) {
+    setting.addDropdown((dropdown) => {
+      for (const id of options)
+        dropdown.addOption(id, id);
+      dropdown.setValue(current).onChange(async (value) => {
+        plugin.settings[opts.key] = value;
+        await plugin.saveSettings();
+      });
+    });
+  }
+  setting.addButton((button) => {
+    button.setButtonText("Refresh models").onClick(async () => {
+      button.setDisabled(true);
+      button.setButtonText("Loading…");
+      try {
+        const models = await fetchModels(plugin.settings);
+        if (!plugin.settings.cachedModels)
+          plugin.settings.cachedModels = {};
+        plugin.settings.cachedModels[provider] = models;
+        if (models.length && !models.includes(plugin.settings[opts.key])) {
+          plugin.settings[opts.key] = models[0];
+        }
+        await plugin.saveSettings();
+        new import_obsidian.Notice(`✅ Loaded ${models.length} model(s).`);
+        settingTab.display();
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        new import_obsidian.Notice(`❌ Could not load models: ${msg}`);
+        button.setDisabled(false);
+        button.setButtonText("Refresh models");
+      }
+    });
+  });
+  new import_obsidian.Setting(containerEl).setName("Model (manual)").setDesc(opts.manualDesc || "Type a model id directly if it is not in the list above.").addText(
+    (text) => text.setPlaceholder(opts.placeholder || "").setValue(current).onChange(async (value) => {
+      plugin.settings[opts.key] = value.trim();
+      await plugin.saveSettings();
+    })
+  );
+}
 var AnswerWithAISettingTab = class extends import_obsidian.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
@@ -311,7 +496,7 @@ var AnswerWithAISettingTab = class extends import_obsidian.PluginSettingTab {
     });
     containerEl.createEl("h2", { text: "Provider" });
     new import_obsidian.Setting(containerEl).setName("AI Provider").setDesc("Choose which AI provider to use for answering questions.").addDropdown(
-      (dropdown) => dropdown.addOption("openai", "OpenAI (GPT)").addOption("claude", "Claude (Anthropic)").addOption("gemini", "Gemini (Google)").addOption("ollama", "Ollama (Local)").setValue(this.plugin.settings.provider).onChange(async (value) => {
+      (dropdown) => dropdown.addOption("openai", "OpenAI (GPT)").addOption("claude", "Claude (Anthropic)").addOption("gemini", "Gemini (Google)").addOption("ollama", "Ollama (Local)").addOption("openai-local", "OpenAI (Local / llama.cpp)").setValue(this.plugin.settings.provider).onChange(async (value) => {
         this.plugin.settings.provider = value;
         await this.plugin.saveSettings();
         this.display();
@@ -326,12 +511,11 @@ var AnswerWithAISettingTab = class extends import_obsidian.PluginSettingTab {
         })
       );
       addTestConnectionButton(containerEl, this.plugin);
-      new import_obsidian.Setting(containerEl).setName("Model").setDesc("OpenAI model to use (e.g. gpt-4o, gpt-4o-mini, gpt-3.5-turbo)").addText(
-        (text) => text.setValue(this.plugin.settings.openaiModel).onChange(async (value) => {
-          this.plugin.settings.openaiModel = value.trim();
-          await this.plugin.saveSettings();
-        })
-      );
+      addModelSetting(containerEl, this, {
+        key: "openaiModel",
+        desc: "OpenAI model to use. Click 'Refresh models' to load the list from your account.",
+        placeholder: "gpt-4o"
+      });
     }
     if (this.plugin.settings.provider === "claude") {
       containerEl.createEl("h2", { text: "Claude Settings" });
@@ -342,12 +526,11 @@ var AnswerWithAISettingTab = class extends import_obsidian.PluginSettingTab {
         })
       );
       addTestConnectionButton(containerEl, this.plugin);
-      new import_obsidian.Setting(containerEl).setName("Model").setDesc("Claude model to use (e.g. claude-sonnet-4-20250514, claude-3-haiku-20240307)").addText(
-        (text) => text.setValue(this.plugin.settings.claudeModel).onChange(async (value) => {
-          this.plugin.settings.claudeModel = value.trim();
-          await this.plugin.saveSettings();
-        })
-      );
+      addModelSetting(containerEl, this, {
+        key: "claudeModel",
+        desc: "Claude model to use. Click 'Refresh models' to load the list from your account.",
+        placeholder: "claude-sonnet-4-20250514"
+      });
     }
     if (this.plugin.settings.provider === "gemini") {
       containerEl.createEl("h2", { text: "Gemini Settings" });
@@ -358,12 +541,11 @@ var AnswerWithAISettingTab = class extends import_obsidian.PluginSettingTab {
         })
       );
       addTestConnectionButton(containerEl, this.plugin);
-      new import_obsidian.Setting(containerEl).setName("Model").setDesc("Gemini model to use (e.g. gemini-2.0-flash, gemini-1.5-pro)").addText(
-        (text) => text.setValue(this.plugin.settings.geminiModel).onChange(async (value) => {
-          this.plugin.settings.geminiModel = value.trim();
-          await this.plugin.saveSettings();
-        })
-      );
+      addModelSetting(containerEl, this, {
+        key: "geminiModel",
+        desc: "Gemini model to use. Click 'Refresh models' to load the list from your account.",
+        placeholder: "gemini-2.0-flash"
+      });
     }
     if (this.plugin.settings.provider === "ollama") {
       containerEl.createEl("h2", { text: "Ollama Settings" });
@@ -374,12 +556,36 @@ var AnswerWithAISettingTab = class extends import_obsidian.PluginSettingTab {
         })
       );
       addTestConnectionButton(containerEl, this.plugin);
-      new import_obsidian.Setting(containerEl).setName("Model").setDesc("Ollama model to use (e.g. llama3, qwen3:14b, gemma3:4b).").addText(
-        (text) => text.setValue(this.plugin.settings.ollamaModel).onChange(async (value) => {
-          this.plugin.settings.ollamaModel = value.trim();
+      addModelSetting(containerEl, this, {
+        key: "ollamaModel",
+        desc: "Ollama model to use. Click 'Refresh models' to load the installed models.",
+        placeholder: "llama3"
+      });
+    }
+    if (this.plugin.settings.provider === "openai-local") {
+      containerEl.createEl("h2", { text: "OpenAI (Local) Settings" });
+      containerEl.createEl("p", {
+        text: "For an OpenAI-compatible local server such as llama.cpp (llama-server), LM Studio, or vLLM. Uses the /v1/chat/completions and /v1/models endpoints.",
+        cls: "setting-item-description"
+      });
+      new import_obsidian.Setting(containerEl).setName("Base URL").setDesc("URL of your local OpenAI-compatible server (without the /v1 suffix).").addText(
+        (text) => text.setPlaceholder("http://localhost:8080").setValue(this.plugin.settings.openaiLocalBaseUrl).onChange(async (value) => {
+          this.plugin.settings.openaiLocalBaseUrl = value.trim();
           await this.plugin.saveSettings();
         })
       );
+      new import_obsidian.Setting(containerEl).setName("API Key").setDesc("Optional. Only needed if your local server requires an API key (llama.cpp --api-key).").addText(
+        (text) => text.setPlaceholder("(usually empty)").setValue(this.plugin.settings.openaiLocalApiKey).onChange(async (value) => {
+          this.plugin.settings.openaiLocalApiKey = value.trim();
+          await this.plugin.saveSettings();
+        })
+      );
+      addTestConnectionButton(containerEl, this.plugin);
+      addModelSetting(containerEl, this, {
+        key: "openaiLocalModel",
+        desc: "Model to request. Click 'Refresh models' to load what the server currently has loaded. llama.cpp usually serves a single model regardless of this value.",
+        placeholder: "local-model"
+      });
     }
     containerEl.createEl("h2", { text: "General" });
     new import_obsidian.Setting(containerEl).setName("Default Answer Mode").setDesc("Short: 3-4 sentences. Long: up to 10 sentences with detailed explanation.").addDropdown(
