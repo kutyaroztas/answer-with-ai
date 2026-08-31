@@ -35,7 +35,7 @@ var DEFAULT_SETTINGS = {
   ollamaModel: "llama3",
   openaiLocalBaseUrl: "http://localhost:8080",
   openaiLocalApiKey: "",
-  openaiLocalModel: "",
+  openaiLocalModel: "local-model",
   systemPrompt: "You are a helpful assistant. Answer the question concisely and clearly in plain text. Do not use markdown formatting, code blocks, bullet points, or any special formatting. Just write plain sentences.",
   maxTokens: 1024,
   answerMode: "short",
@@ -159,12 +159,13 @@ async function callOpenAILocal(question, settings) {
       ],
       max_tokens: settings.maxTokens,
       stream: false
-    })
+    }),
+    throw: false
   });
   if (response.status !== 200) {
     throw new Error(`OpenAI (Local) API error: ${response.status} - ${response.text}`);
   }
-  const content = response.json.choices[0].message.content.trim();
+  const content = (response.json?.choices?.[0]?.message?.content || "").trim();
   if (!content) {
     throw new Error("OpenAI (Local) returned no content — the response may have been truncated by the token limit or consumed by model reasoning. Try raising Max Tokens.");
   }
@@ -184,7 +185,7 @@ async function fetchModels(settings) {
       });
       if (response.status !== 200)
         throw new Error(`HTTP ${response.status} - ${response.text}`);
-      return response.json.data.map((m) => m.id).sort();
+      return response.json.data.map((m) => m.id).filter((id) => /^(gpt-|o1|o3|o4|chatgpt-)/.test(id) && !/(embedding|whisper|tts|audio|dall-e|davinci|babbage|moderation|image|search|realtime|transcribe)/.test(id)).sort();
     }
     case "claude": {
       if (!settings.claudeApiKey)
